@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Get conversations",
+      "method": "GET",
+      "path": "/?action=conversations",
+      "headers": {"x-user-id": "1"},
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get messages",
+      "method": "GET",
+      "path": "/?action=messages&conv_id=1",
+      "headers": {"x-user-id": "1"},
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Send message",
+      "method": "POST",
+      "path": "/?action=send",
+      "headers": {"x-user-id": "1", "Content-Type": "application/json"},
+      "body": {"conv_id": 1, "text": "Тест сообщение"},
+      "expectedStatus": 200,
+      "expectedBody": {"text": "Тест сообщение"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
