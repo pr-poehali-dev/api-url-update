@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "name": "Get profile",
+      "method": "GET",
+      "path": "/?action=get",
+      "headers": {"x-user-id": "1"},
+      "expectedStatus": 200,
+      "expectedBody": {"username": "alex"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Update display name",
+      "method": "POST",
+      "path": "/?action=update_name",
+      "headers": {"x-user-id": "1", "Content-Type": "application/json"},
+      "body": {"display_name": "Александр Петров"},
+      "expectedStatus": 200,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Update email",
+      "method": "POST",
+      "path": "/?action=update_email",
+      "headers": {"x-user-id": "1", "Content-Type": "application/json"},
+      "body": {"email": "alex@crack.app"},
+      "expectedStatus": 200,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

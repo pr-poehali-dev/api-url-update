@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 
 const CHAT_URL = "https://functions.poehali.dev/d59ce824-176e-4130-adb1-acb7c3d49527";
+const PROFILE_URL = "https://functions.poehali.dev/5a961ff0-70e4-4b17-a5cb-38592f618c6e";
+const CROC_LOGO = "https://cdn.poehali.dev/projects/87da94b7-3efd-465d-9cca-89745a54aeb8/files/48fee405-2856-49e4-963a-df0f7ef43c5e.jpg";
 const ME = 1;
 
 type Page = "feed" | "messages" | "profile" | "search" | "groups" | "settings";
@@ -400,14 +402,130 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   );
 }
 
+function FieldEditor({ label, value, onSave, placeholder, prefix, hint }: {
+  label: string; value: string; onSave: (v: string) => Promise<string | null>;
+  placeholder?: string; prefix?: string; hint?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value);
+  const [current, setCurrent] = useState(value);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState(false);
+
+  const save = async () => {
+    if (val.trim() === current) { setEditing(false); return; }
+    setLoading(true); setErr("");
+    const error = await onSave(val.trim());
+    setLoading(false);
+    if (error) { setErr(error); }
+    else { setCurrent(val.trim()); setEditing(false); setOk(true); setTimeout(() => setOk(false), 2000); }
+  };
+
+  return (
+    <div className="px-4 py-3.5 border-b border-[#253545] last:border-0">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-[#4a6680] font-medium">{label}</span>
+        {ok && <span className="text-xs text-green-400">✓ Сохранено</span>}
+        {!editing && <button onClick={() => { setEditing(true); setVal(current); }} className="text-xs text-[#4d9de0] hover:text-[#7ab8f0]">Изменить</button>}
+      </div>
+      {editing ? (
+        <div className="flex gap-2 items-center">
+          <div className="flex-1 flex items-center bg-[#17212b] border border-[#4d9de0] rounded-xl overflow-hidden">
+            {prefix && <span className="pl-3 text-[#4a6680] text-sm select-none">{prefix}</span>}
+            <input autoFocus value={val} onChange={e => setVal(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+              className="flex-1 bg-transparent px-3 py-2 text-sm text-[#e8f0fe] placeholder-[#4a6680] focus:outline-none"
+              placeholder={placeholder}/>
+          </div>
+          <button onClick={save} disabled={loading}
+            className="px-3 py-2 rounded-xl bg-[#2b5fad] text-white text-xs font-medium hover:bg-[#3a6fc0] disabled:opacity-50 transition-colors">
+            {loading ? "..." : "OK"}
+          </button>
+          <button onClick={() => setEditing(false)} className="px-3 py-2 rounded-xl bg-[#253545] text-[#6e8fac] text-xs hover:bg-[#2e3f52] transition-colors">✕</button>
+        </div>
+      ) : (
+        <p className="text-sm text-[#b8cfe8]">{prefix}{current || <span className="text-[#4a6680] italic">не указано</span>}</p>
+      )}
+      {err && <p className="text-xs text-red-400 mt-1">{err}</p>}
+      {hint && !editing && <p className="text-[11px] text-[#4a6680] mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+function AvatarUploader({ current, initials, onChange }: { current: string; initials: string; onChange: (url: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
+
+  const upload = async (file: File) => {
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = (e.target?.result as string).split(",")[1];
+      const mime = file.type;
+      try {
+        const r = await fetch(`${PROFILE_URL}?action=update_avatar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-user-id": String(ME) },
+          body: JSON.stringify({ image_base64: base64, mime }),
+        });
+        const raw = await r.json();
+        const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (data.avatar_url) onChange(data.avatar_url);
+      } catch (ex) { console.error(ex); }
+      setLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative">
+        {current
+          ? <img src={current} alt="avatar" className="w-20 h-20 rounded-full object-cover border-4 border-[#253545]"/>
+          : <div className="w-20 h-20 rounded-full bg-[#2b5fad] text-white flex items-center justify-center text-2xl font-bold border-4 border-[#253545]">{initials}</div>
+        }
+        <button onClick={() => fileRef.current?.click()}
+          className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#2b5fad] flex items-center justify-center border-2 border-[#17212b] hover:bg-[#3a6fc0] transition-colors">
+          {loading ? <span className="text-white text-[10px]">...</span> : <Icon name="Camera" size={12} className="text-white"/>}
+        </button>
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files?.[0]) upload(e.target.files[0]); }}/>
+      <button onClick={() => fileRef.current?.click()} className="text-xs text-[#4d9de0] hover:text-[#7ab8f0]">Сменить фото</button>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const [t, setT] = useState<Record<string, boolean>>({
     notif_msg: true, notif_requests: true, notif_groups: false, notif_likes: true,
     priv_profile: false, priv_contacts: true, priv_search: true,
-    sec_2fa: false,
-    ui_compact: false, ui_animations: true,
+    sec_2fa: false, ui_compact: false, ui_animations: true,
   });
   const tog = (k: string) => setT(p => ({ ...p, [k]: !p[k] }));
+
+  const [profile, setProfile] = useState({ display_name: "Александр Петров", username: "alex", email: "", avatar_initials: "АП", avatar_url: "" });
+
+  useEffect(() => {
+    fetch(`${PROFILE_URL}?action=get`, { headers: { "x-user-id": String(ME) } })
+      .then(r => r.json())
+      .then(raw => { const d = typeof raw === "string" ? JSON.parse(raw) : raw; setProfile(d); })
+      .catch(() => {});
+  }, []);
+
+  const apiCall = async (action: string, body: object): Promise<string | null> => {
+    try {
+      const r = await fetch(`${PROFILE_URL}?action=${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": String(ME) },
+        body: JSON.stringify(body),
+      });
+      const raw = await r.json();
+      const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (!r.ok || data.error) return data.error || "Ошибка";
+      return null;
+    } catch { return "Ошибка соединения"; }
+  };
 
   const sections = [
     { title: "Уведомления", items: [
@@ -432,15 +550,54 @@ function SettingsPage() {
 
   return (
     <div className="space-y-3 animate-fade-in">
-      <div className="bg-[#1e2b3c] rounded-2xl p-4 flex items-center gap-3">
-        <Ava s="АП" size="lg"/>
-        <div className="flex-1">
-          <p className="font-bold text-[#e8f0fe]">Александр Петров</p>
-          <p className="text-xs text-[#6e8fac]">@alex · Senior Product Manager</p>
+      {/* Profile card с загрузкой фото */}
+      <div className="bg-[#1e2b3c] rounded-2xl p-5 flex flex-col items-center gap-3">
+        <AvatarUploader
+          current={profile.avatar_url}
+          initials={profile.avatar_initials}
+          onChange={url => setProfile(p => ({ ...p, avatar_url: url }))}
+        />
+        <div className="text-center">
+          <p className="font-bold text-[#e8f0fe]">{profile.display_name}</p>
+          <p className="text-xs text-[#6e8fac]">@{profile.username}</p>
         </div>
-        <button className="px-3 py-1.5 rounded-xl border border-[#2b5fad] text-[#4d9de0] text-xs font-medium hover:bg-[#2b5fad]/20 transition-colors">Изменить</button>
       </div>
 
+      {/* Редактирование профиля */}
+      <div className="bg-[#1e2b3c] rounded-2xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[#253545]">
+          <p className="text-[11px] font-semibold text-[#4a6680] uppercase tracking-wider">Личные данные</p>
+        </div>
+        <FieldEditor
+          label="Отображаемое имя" value={profile.display_name} placeholder="Имя Фамилия"
+          onSave={async (v) => {
+            const err = await apiCall("update_name", { display_name: v });
+            if (!err) setProfile(p => ({ ...p, display_name: v, avatar_initials: v.split(" ").map(w => w[0]).join("").toUpperCase().slice(0,2) }));
+            return err;
+          }}
+        />
+        <FieldEditor
+          label="Юзернейм" value={profile.username} placeholder="username" prefix="@"
+          hint="Только латиница, цифры и _"
+          onSave={async (v) => {
+            const clean = v.startsWith("@") ? v.slice(1) : v;
+            const err = await apiCall("update_username", { username: clean });
+            if (!err) setProfile(p => ({ ...p, username: clean }));
+            return err;
+          }}
+        />
+        <FieldEditor
+          label="Email" value={profile.email} placeholder="you@example.com"
+          hint="Для восстановления доступа"
+          onSave={async (v) => {
+            const err = await apiCall("update_email", { email: v });
+            if (!err) setProfile(p => ({ ...p, email: v }));
+            return err;
+          }}
+        />
+      </div>
+
+      {/* Переключатели */}
       {sections.map((sec, si) => (
         <div key={si} className="bg-[#1e2b3c] rounded-2xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[#253545]">
@@ -460,15 +617,11 @@ function SettingsPage() {
         <div className="px-4 py-2.5 border-b border-[#253545]">
           <p className="text-[11px] font-semibold text-[#4a6680] uppercase tracking-wider">Аккаунт</p>
         </div>
-        {["Сменить пароль", "Сменить имя пользователя", "Привязать email"].map((label, i) => (
-          <button key={i} className="w-full flex items-center justify-between px-4 py-3.5 text-sm text-[#b8cfe8] hover:bg-[#253545] transition-colors border-b border-[#253545]">
-            {label}
-            <Icon name="ChevronRight" size={15} className="text-[#4a6680]"/>
-          </button>
-        ))}
+        <button className="w-full flex items-center justify-between px-4 py-3.5 text-sm text-[#b8cfe8] hover:bg-[#253545] transition-colors border-b border-[#253545]">
+          Сменить пароль <Icon name="ChevronRight" size={15} className="text-[#4a6680]"/>
+        </button>
         <button className="w-full flex items-center justify-between px-4 py-3.5 text-sm text-red-400 hover:bg-red-900/20 transition-colors">
-          Выйти из аккаунта
-          <Icon name="LogOut" size={15}/>
+          Выйти из аккаунта <Icon name="LogOut" size={15}/>
         </button>
       </div>
     </div>
@@ -491,9 +644,7 @@ const Index = () => {
       <header className="sticky top-0 z-50 bg-[#17212b] border-b border-[#253545]">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between" style={{ height: 52 }}>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#2b5fad] to-[#4d9de0] flex items-center justify-center shadow">
-              <Icon name="Zap" size={16} className="text-white"/>
-            </div>
+            <img src={CROC_LOGO} alt="Crack" className="w-8 h-8 rounded-xl object-cover shadow"/>
             <span className="font-bold text-white text-lg tracking-tight">Crack</span>
           </div>
 
